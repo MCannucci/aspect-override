@@ -2,9 +2,9 @@
 
 namespace AspectOverride\Core;
 
-use AspectOverride\Transformers\ClassTransformer;
-use AspectOverride\Transformers\FunctionOverrider;
-use AspectOverride\Transformers\Visitors\BeforeFunctionVisitor;
+use AspectOverride\Filters\AbstractFilter;
+use AspectOverride\Filters\FunctionHookFilter;
+use AspectOverride\Filters\FunctionLoader;
 
 /**
  * Implementation adapted from:
@@ -31,15 +31,24 @@ class StreamInterceptor
      */
     public $context;
 
+    /**
+     * @var AbstractFilter[]
+     */
+    public $filters;
+
     /** @var bool */
     protected $isIntercepting = false;
 
-    /** @var StreamProcessor */
-    protected $streamProcessor;
-
-    public function __construct(StreamProcessor $processor = null)
-    {
-        $this->streamProcessor = $processor ?? new StreamProcessor();
+    /**
+     * @param AbstractFilter[] $filters
+     */
+    public function __construct(
+        array $filters = []
+    ) {
+        $this->filters = $filters ?: [new FunctionHookFilter(), new FunctionLoader()];
+        foreach ($this->filters as $filter) {
+            $filter->register();
+        }
     }
 
     public function enable(): void
@@ -98,13 +107,15 @@ class StreamInterceptor
 
         $this->restore();
 
-        if($this->shouldProcess($path)) {
-            $this->resource = $this->streamProcessor->processOpen($path);
+        if (isset($this->context)) {
+            $this->resource = fopen($path, $mode, (bool)($options & STREAM_USE_PATH), $this->context);
         } else {
-            if (isset($this->context)) {
-                $this->resource = fopen($path, $mode, (bool)($options & STREAM_USE_PATH), $this->context);
-            } else {
-                $this->resource = fopen($path, $mode, (bool)($options & STREAM_USE_PATH));
+            $this->resource = fopen($path, $mode, (bool)($options & STREAM_USE_PATH));
+        }
+
+        if (false !== $this->resource && $options & self::STREAM_OPEN_FOR_INCLUDE && $this->shouldProcess($path)) {
+            foreach ($this->filters as $filter) {
+                stream_filter_append($this->resource, $filter->getName(), STREAM_FILTER_READ);
             }
         }
 

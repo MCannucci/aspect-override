@@ -12,7 +12,7 @@ use AspectOverride\Core\Configuration;
 class Instance
 {
     /** @var \AspectOverride\Core\Instance */
-    public static $instance;
+    private static $instance;
 
     /**
      * @param mixed $name

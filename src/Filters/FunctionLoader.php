@@ -1,13 +1,29 @@
 <?php
 
-namespace AspectOverride\Transformers;
+
+namespace AspectOverride\Filters;
+
 
 use AspectOverride\Facades\Registry;
-use AspectOverride\Util\Utilities;
 
-class FunctionOverrider
+class FunctionLoader extends AbstractFilter
 {
-    public static function loadFunctions(string $namespace): void
+
+    public function getName(): string
+    {
+        return "FUNCTION_LOADER";
+    }
+
+    public function process(string $chunk, int $length)
+    {
+        $re = "/(namespace)(.+?)(;)/";
+        if(preg_match($re, $chunk, $matches)){
+            $namespace = trim($matches[2]);
+            $this->loadFunctions($namespace);
+        }
+    }
+
+    public function loadFunctions(string $namespace): void
     {
         foreach (Registry::getFunctions() as $function) {
             $code = "

@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use AspectOverride\Facades\Registry;
 use AspectOverride\Override;
 use PHPUnit\Framework\TestCase;
+use Tests\Util\TestClasses\BigClass;
 use Tests\Util\TestClasses\OverloadedFunction;
 use Tests\Util\TestClasses\MultipleMethods;
 use Tests\Util\TestClasses\OneMethod;
@@ -77,5 +78,12 @@ class MockerTest extends TestCase
         });
         $class = new TestClass();
         $this->assertNull($class->fromProtectedMethod());
+    }
+    public function testA() {
+        Override::method(BigClass::class, "test1", function(){
+           return 1;
+        });
+        $a = new BigClass();
+        $this->assertEquals(1, $a->test1());
     }
 }

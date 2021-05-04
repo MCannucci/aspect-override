@@ -15,7 +15,7 @@ namespace AspectOverride\Facades;
 class Registry
 {
     /** @var \AspectOverride\Core\Registry */
-    public static $instance;
+    private static $instance;
 
     /**
      * @param mixed $name

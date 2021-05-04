@@ -20,14 +20,17 @@ use AspectOverride\Core\Instance;
 require __DIR__ . '/../vendor/autoload.php';
 
 // options are:
-// directories => which directories to mock
-// temporaryFilesDir => where to save the temporary files, by default it is /tmp/
-// disableCaching => whether aspect classes should use their previously creating files if there are no changes
-Instance::getInstance()->init([
-  'directories' => [
-    __DIR__ . '/../tests'
-  ]
-]);
+// setDirectories => The directory in which php classes are elligble for monkey patching/interception
+// setTemporaryFilesDirectory => where to save the temporary files, by default it is /tmp/aspect-override
+// setShouldUseCache => whether aspect classes should use their previously creating files if there are no changes
+AspectOverride\Facades\Instance::initialize(
+    \AspectOverride\Core\Configuration::create()
+        ->setTemporaryFilesDirectory("/tmp/temporary_directory")
+        ->setDirectories([
+            __DIR__ . '/../tests/Util/TestClasses'
+        ])
+        ->setShouldUseCache(false)
+);
 ```
 
 ### Usage

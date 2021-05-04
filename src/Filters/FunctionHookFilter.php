@@ -4,13 +4,15 @@ namespace AspectOverride\Filters;
 
 class FunctionHookFilter extends AbstractFilter
 {
-    // These two need to both be the same amount of characters
+
     private const PRE_HOOK = /** @lang InjectablePHP */ <<<CODE
 if(\$__fn__ = \AspectOverride\Facades\Registry::getForClass(__CLASS__,__FUNCTION__)) { return \$__fn__(...func_get_args()); }
 CODE;
     private const PRE_HOOK_NO_RETURN = /** @lang InjectablePHP */ <<<CODE
 if(\$__fn__ = \AspectOverride\Facades\Registry::getForClass(__CLASS__,__FUNCTION__)) { \$__fn__(...func_get_args()); return;}
 CODE;
+    private const TOKEN_CONTENT = 1;
+    private const TOKEN_NAME = 0;
 
     public function getName(): string
     {
@@ -19,29 +21,51 @@ CODE;
 
     public function process(string $chunk, int $length)
     {
-        // Oh god, oh shit. Forgive me for using regex to modify PHP
-        $re = '/(function.+?{)(\s+)([^\s\\\\])/s';
-        preg_match_all($re, $chunk, $matches, PREG_OFFSET_CAPTURE, 0);
-        if ($matches) {
-            $function = $matches[1];
-            $matches = $matches[3]; // Only interested in the last match
-            /**
-             * Each time we insert our code it will bump everything forward causing the previously
-             * found positions to become invalid, we have to apply this "bump" manually ourselves
-             */
-            $matchesLength = count($matches);
-            $bumpCount = strlen(self::PRE_HOOK);
-            for($i = 0; $i < $matchesLength; $i++) {
-                $shouldOmitReturn = preg_match("/\).+void/", $function[$i][0]);
-                $match = $matches[$i];
-                $pos = ($match[1] + ($bumpCount * $i)) - 1;
-                /**
-                 * Insert the "before" function hook before the first variable/statement
-                 */
-                $code = $shouldOmitReturn ? self::PRE_HOOK_NO_RETURN : self::PRE_HOOK;
-                $chunk = substr($chunk, 0, $pos) . $code . substr($chunk, $pos);
+      $tokens = token_get_all($chunk, TOKEN_PARSE);
+      unset($chunk);
+      $buffer = "";
+      $totalTokens = count($tokens);
+      for ($i = 0; $i < $totalTokens; $i++) {
+        [$content, $type] = $this->normalizeToken($tokens[$i]);
+        if(T_PUBLIC === $type || T_PROTECTED === $type || T_PRIVATE === $type) {
+          $shouldNotReturnAfterIntercept = false;
+          // Keep consuming tokens until we've hit the first openning brace to denote the end of the function declaration
+          do {
+            // Hack, we're probably in an abstract function
+            if(!array_key_exists($i, $tokens)) {
+              break;
             }
+            [$content, $type] = $this->normalizeToken($tokens[$i]);
+            $buffer .= $content;
+            // I think it's safe to assume if we hit void here, it's only in the context of a function declaration
+            if($content === 'void') {
+              $shouldNotReturnAfterIntercept = true;
+            }
+            $i++;
+          } while ($type !== '{');
+          // Keep consuming tokens until we've hit a non comment/whitespace to denote the start of the implementation
+          do {
+            // Hack, we're probably in an abstract function
+            if(!array_key_exists($i, $tokens)) {
+              break;
+            }
+            [$content, $type] = $this->normalizeToken($tokens[$i]);
+            $nonStatement = $type === '{' || $type === T_WHITESPACE || $type === T_COMMENT || $type === T_DOC_COMMENT;
+            if(!$nonStatement) {
+              $buffer .= ($shouldNotReturnAfterIntercept ?
+                self::PRE_HOOK_NO_RETURN : self::PRE_HOOK ) . $content;
+              continue;
+            }
+            $buffer .= $content;
+            $i++;
+          } while ($nonStatement);
+          continue;
         }
-        return $chunk;
+        $buffer .= $content;
+      }
+      return $buffer;
+    }
+    protected function normalizeToken($token) {
+      return is_array($token) ? [$token[self::TOKEN_CONTENT], $token[self::TOKEN_NAME]] : [$token, $token];
     }
 }
